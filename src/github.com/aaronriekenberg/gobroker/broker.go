@@ -70,62 +70,62 @@ func NewBroker(listenAddress string) *Broker {
   }
 }
 
-func (broker *Broker) Run() {
-  local, err := net.Listen(netString, broker.listenAddress)
+func (b *Broker) Run() {
+  local, err := net.Listen(netString, b.listenAddress)
   if err != nil {
     logger.Fatal("cannot listen: ", err)
   }
-  logger.Printf("listening on %v", broker.listenAddress)
+  logger.Printf("listening on %v", b.listenAddress)
   for {
     clientConnection, err := local.Accept()
     if err != nil {
       logger.Printf("accept failed: %v", err)
     } else {
-      c := newClient(clientConnection, broker)
+      c := newClient(clientConnection, b)
       c.start()
     }
   }
 }
 
-func (broker *Broker) subscribeToTopic(topicName string, c *client) {
-  broker.mutex.Lock()
-  topic, ok := broker.topicNameToTopic[topicName]
+func (b *Broker) subscribeToTopic(topicName string, c *client) {
+  b.mutex.Lock()
+  topic, ok := b.topicNameToTopic[topicName]
   if !ok {
     topic = newTopic()
     logger.Printf("create topic %v", topicName)
-    broker.topicNameToTopic[topicName] = topic
+    b.topicNameToTopic[topicName] = topic
   }
-  broker.mutex.Unlock()
+  b.mutex.Unlock()
 
   topic.addClient(c)
 }
 
-func (broker *Broker) unsubscribeFromTopic(topicName string, c *client) {
-  broker.mutex.Lock()
-  topic, ok := broker.topicNameToTopic[topicName]
-  broker.mutex.Unlock()
+func (b *Broker) unsubscribeFromTopic(topicName string, c *client) {
+  b.mutex.Lock()
+  topic, ok := b.topicNameToTopic[topicName]
+  b.mutex.Unlock()
 
   if ok {
     topic.removeClient(c)
   }
 }
 
-func (broker *Broker) sendMessagePayloadToTopic(topicName string, messagePayload []byte) {
-  broker.mutex.Lock()
-  topic, ok := broker.topicNameToTopic[topicName]
-  broker.mutex.Unlock()
+func (b *Broker) sendMessagePayloadToTopic(topicName string, messagePayload []byte) {
+  b.mutex.Lock()
+  topic, ok := b.topicNameToTopic[topicName]
+  b.mutex.Unlock()
 
   if ok {
     topic.sendMessagePayload(messagePayload)
   }
 }
 
-func (broker *Broker) destroyClient(c *client) {
-  broker.mutex.Lock()
-  for _, topic := range broker.topicNameToTopic {
+func (b *Broker) destroyClient(c *client) {
+  b.mutex.Lock()
+  for _, topic := range b.topicNameToTopic {
     topic.removeClient(c)
   }
-  broker.mutex.Unlock()
+  b.mutex.Unlock()
 
   c.destroy()
 }
