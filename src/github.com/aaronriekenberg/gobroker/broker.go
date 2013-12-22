@@ -5,12 +5,12 @@ import (
   "code.google.com/p/goprotobuf/proto"
   "encoding/binary"
   "fmt"
+  "github.com/aaronriekenberg/sms_protocol_protobuf"
   "io"
   "log"
   "net"
   "os"
   "runtime"
-  "sms_protocol_protobuf"
   "sync"
 )
 
