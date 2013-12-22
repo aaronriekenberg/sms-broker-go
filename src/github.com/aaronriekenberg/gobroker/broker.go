@@ -50,9 +50,15 @@ func (t *topic) removeClient(c *client) {
 
 func (t *topic) sendMessagePayload(payload []byte) {
   t.mutex.Lock()
-  defer t.mutex.Unlock()
-
+  clients := make([]*client, len(t.clientIDToClientState))
+  i := 0
   for _, client := range t.clientIDToClientState {
+    clients[i] = client
+    i += 1
+  }
+  t.mutex.Unlock()
+
+  for _, client := range clients {
     client.writeMessagePayload(payload)
   }
 }
