@@ -116,6 +116,21 @@ func (b *Broker) unsubscribeFromTopic(topicName string, c *client) {
   }
 }
 
+func (b *Broker) unsubscribeFromAllTopics(c *client) {
+  b.mutex.Lock()
+  topics := make([]*topic, len(b.topicNameToTopic))
+  i := 0
+  for _, topic := range b.topicNameToTopic {
+    topics[i] = topic
+    i += 1
+  }
+  b.mutex.Unlock()
+
+  for _, topic := range topics {
+    topic.removeClient(c)
+  }
+}
+
 func (b *Broker) sendMessagePayloadToTopic(topicName string, messagePayload []byte) {
   b.mutex.Lock()
   topic, ok := b.topicNameToTopic[topicName]
@@ -124,16 +139,6 @@ func (b *Broker) sendMessagePayloadToTopic(topicName string, messagePayload []by
   if ok {
     topic.sendMessagePayload(messagePayload)
   }
-}
-
-func (b *Broker) destroyClient(c *client) {
-  b.mutex.Lock()
-  for _, topic := range b.topicNameToTopic {
-    topic.removeClient(c)
-  }
-  b.mutex.Unlock()
-
-  c.destroy()
 }
 
 type client struct {
@@ -176,14 +181,15 @@ func (c *client) start() {
 
 func (c *client) destroy() {
   c.mutex.Lock()
-  defer c.mutex.Unlock()
-
   if !c.destroyed {
     logger.Printf("disconnect client %v %v", c.uniqueID, c.connectionString)
     c.destroyed = true
     c.connection.Close()
     close(c.writeChannel)
   }
+  c.mutex.Unlock()
+
+  c.broker.unsubscribeFromAllTopics(c)
 }
 
 func (c *client) writeMessagePayload(payload []byte) {
@@ -230,7 +236,7 @@ func (c *client) writeToClient() {
 
 func (c *client) readFromClient() {
   defer logger.Printf("readFromClient exit %v", c.uniqueID)
-  defer c.broker.destroyClient(c)
+  defer c.destroy()
 
   headerBuffer := make([]byte, 4)
   for {
