@@ -79,7 +79,7 @@ func NewBroker(listenAddress string) *Broker {
 func (b *Broker) Run() {
   local, err := net.Listen(netString, b.listenAddress)
   if err != nil {
-    logger.Fatal("cannot listen: ", err)
+    logger.Fatalf("cannot listen: %v", err)
   }
   logger.Printf("listening on %v", b.listenAddress)
   for {
