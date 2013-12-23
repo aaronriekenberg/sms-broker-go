@@ -54,7 +54,7 @@ type Client interface {
 }
 
 type topic struct {
-  mutex            sync.Mutex
+  mutex            sync.RWMutex
   clientIDToClient map[string]Client
 }
 
@@ -79,14 +79,14 @@ func (t *topic) RemoveClient(c Client) {
 }
 
 func (t *topic) PublishMessagePayload(payload []byte) {
-  t.mutex.Lock()
+  t.mutex.RLock()
   clients := make([]Client, len(t.clientIDToClient))
   i := 0
   for _, client := range t.clientIDToClient {
     clients[i] = client
     i += 1
   }
-  t.mutex.Unlock()
+  t.mutex.RUnlock()
 
   for _, client := range clients {
     client.WriteMessagePayload(payload)
@@ -95,7 +95,7 @@ func (t *topic) PublishMessagePayload(payload []byte) {
 
 type broker struct {
   listenAddress    string
-  mutex            sync.Mutex
+  mutex            sync.RWMutex
   topicNameToTopic map[string]Topic
 }
 
@@ -162,9 +162,9 @@ func (b *broker) UnsubscribeFromAllTopics(c Client) {
 }
 
 func (b *broker) PublishMessagePayloadToTopic(topicName string, messagePayload []byte) {
-  b.mutex.Lock()
+  b.mutex.RLock()
   topic, ok := b.topicNameToTopic[topicName]
-  b.mutex.Unlock()
+  b.mutex.RUnlock()
 
   if ok {
     topic.PublishMessagePayload(messagePayload)
@@ -177,7 +177,7 @@ type client struct {
   connection       net.Conn
   brokerService    BrokerService
   writeChannel     chan []byte
-  mutex            sync.Mutex
+  mutex            sync.RWMutex
   destroyed        bool
 }
 
@@ -223,8 +223,8 @@ func (c *client) destroy() {
 }
 
 func (c *client) WriteMessagePayload(payload []byte) {
-  c.mutex.Lock()
-  defer c.mutex.Unlock()
+  c.mutex.RLock()
+  defer c.mutex.RUnlock()
 
   if !c.destroyed {
     c.writeChannel <- payload
