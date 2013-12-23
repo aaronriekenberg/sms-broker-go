@@ -23,60 +23,90 @@ var (
   logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lmicroseconds)
 )
 
-type topic struct {
-  mutex                 sync.Mutex
-  clientIDToClientState map[string]*client
+type Topic interface {
+  AddClient(c Client)
+
+  RemoveClient(c Client)
+
+  PublishMessagePayload(payload []byte)
 }
 
-func newTopic() *topic {
+type Broker interface {
+  Run()
+}
+
+type BrokerService interface {
+  SubscribeToTopic(topicName string, c Client)
+
+  UnsubscribeFromTopic(topicName string, c Client)
+
+  UnsubscribeFromAllTopics(c Client)
+
+  PublishMessagePayloadToTopic(topicName string, messagePayload []byte)
+}
+
+type Client interface {
+  Start()
+
+  UniqueID() string
+
+  WriteMessagePayload(payload []byte)
+}
+
+type topic struct {
+  mutex            sync.Mutex
+  clientIDToClient map[string]Client
+}
+
+func NewTopic() Topic {
   return &topic{
-    clientIDToClientState: make(map[string]*client),
+    clientIDToClient: make(map[string]Client),
   }
 }
 
-func (t *topic) addClient(c *client) {
+func (t *topic) AddClient(c Client) {
   t.mutex.Lock()
   defer t.mutex.Unlock()
 
-  t.clientIDToClientState[c.getUniqueID()] = c
+  t.clientIDToClient[c.UniqueID()] = c
 }
 
-func (t *topic) removeClient(c *client) {
+func (t *topic) RemoveClient(c Client) {
   t.mutex.Lock()
   defer t.mutex.Unlock()
 
-  delete(t.clientIDToClientState, c.getUniqueID())
+  delete(t.clientIDToClient, c.UniqueID())
 }
 
-func (t *topic) sendMessagePayload(payload []byte) {
+func (t *topic) PublishMessagePayload(payload []byte) {
   t.mutex.Lock()
-  clients := make([]*client, len(t.clientIDToClientState))
+  clients := make([]Client, len(t.clientIDToClient))
   i := 0
-  for _, client := range t.clientIDToClientState {
+  for _, client := range t.clientIDToClient {
     clients[i] = client
     i += 1
   }
   t.mutex.Unlock()
 
   for _, client := range clients {
-    client.writeMessagePayload(payload)
+    client.WriteMessagePayload(payload)
   }
 }
 
-type Broker struct {
+type broker struct {
   listenAddress    string
   mutex            sync.Mutex
-  topicNameToTopic map[string]*topic
+  topicNameToTopic map[string]Topic
 }
 
-func NewBroker(listenAddress string) *Broker {
-  return &Broker{
+func NewBroker(listenAddress string) Broker {
+  return &broker{
     listenAddress:    listenAddress,
-    topicNameToTopic: make(map[string]*topic),
+    topicNameToTopic: make(map[string]Topic),
   }
 }
 
-func (b *Broker) Run() {
+func (b *broker) Run() {
   local, err := net.Listen(netString, b.listenAddress)
   if err != nil {
     logger.Fatalf("cannot listen: %v", err)
@@ -87,38 +117,38 @@ func (b *Broker) Run() {
     if err != nil {
       logger.Printf("accept failed: %v", err)
     } else {
-      c := newClient(clientConnection, b)
-      c.start()
+      c := NewClient(clientConnection, b)
+      c.Start()
     }
   }
 }
 
-func (b *Broker) subscribeToTopic(topicName string, c *client) {
+func (b *broker) SubscribeToTopic(topicName string, c Client) {
   b.mutex.Lock()
   topic, ok := b.topicNameToTopic[topicName]
   if !ok {
-    topic = newTopic()
+    topic = NewTopic()
     logger.Printf("create topic %v", topicName)
     b.topicNameToTopic[topicName] = topic
   }
   b.mutex.Unlock()
 
-  topic.addClient(c)
+  topic.AddClient(c)
 }
 
-func (b *Broker) unsubscribeFromTopic(topicName string, c *client) {
+func (b *broker) UnsubscribeFromTopic(topicName string, c Client) {
   b.mutex.Lock()
   topic, ok := b.topicNameToTopic[topicName]
   b.mutex.Unlock()
 
   if ok {
-    topic.removeClient(c)
+    topic.RemoveClient(c)
   }
 }
 
-func (b *Broker) unsubscribeFromAllTopics(c *client) {
+func (b *broker) UnsubscribeFromAllTopics(c Client) {
   b.mutex.Lock()
-  topics := make([]*topic, len(b.topicNameToTopic))
+  topics := make([]Topic, len(b.topicNameToTopic))
   i := 0
   for _, topic := range b.topicNameToTopic {
     topics[i] = topic
@@ -127,17 +157,17 @@ func (b *Broker) unsubscribeFromAllTopics(c *client) {
   b.mutex.Unlock()
 
   for _, topic := range topics {
-    topic.removeClient(c)
+    topic.RemoveClient(c)
   }
 }
 
-func (b *Broker) sendMessagePayloadToTopic(topicName string, messagePayload []byte) {
+func (b *broker) PublishMessagePayloadToTopic(topicName string, messagePayload []byte) {
   b.mutex.Lock()
   topic, ok := b.topicNameToTopic[topicName]
   b.mutex.Unlock()
 
   if ok {
-    topic.sendMessagePayload(messagePayload)
+    topic.PublishMessagePayload(messagePayload)
   }
 }
 
@@ -145,18 +175,18 @@ type client struct {
   uniqueID         string
   connectionString string
   connection       net.Conn
-  broker           *Broker
+  brokerService    BrokerService
   writeChannel     chan []byte
   mutex            sync.Mutex
   destroyed        bool
 }
 
-func newClient(clientConnection net.Conn, broker *Broker) *client {
+func NewClient(clientConnection net.Conn, brokerService BrokerService) Client {
   return &client{
     uniqueID:         uuid.New(),
     connectionString: buildClientConnectionString(clientConnection),
     connection:       clientConnection,
-    broker:           broker,
+    brokerService:    brokerService,
     writeChannel:     make(chan []byte, clientWriteQueueSize),
     destroyed:        false,
   }
@@ -169,11 +199,11 @@ func buildClientConnectionString(clientConnection net.Conn) string {
     clientConnection.LocalAddr())
 }
 
-func (c *client) getUniqueID() string {
+func (c *client) UniqueID() string {
   return c.uniqueID
 }
 
-func (c *client) start() {
+func (c *client) Start() {
   logger.Printf("connect client %v %v", c.uniqueID, c.connectionString)
   go c.writeToClient()
   go c.readFromClient()
@@ -189,10 +219,10 @@ func (c *client) destroy() {
   }
   c.mutex.Unlock()
 
-  c.broker.unsubscribeFromAllTopics(c)
+  c.brokerService.UnsubscribeFromAllTopics(c)
 }
 
-func (c *client) writeMessagePayload(payload []byte) {
+func (c *client) WriteMessagePayload(payload []byte) {
   c.mutex.Lock()
   defer c.mutex.Unlock()
 
@@ -276,10 +306,10 @@ func (c *client) readFromClient() {
 func (c *client) processIncomingMessage(message *sms_protocol_protobuf.ClientToBrokerMessage) (err error) {
   switch message.GetMessageType() {
   case sms_protocol_protobuf.ClientToBrokerMessage_CLIENT_SUBSCRIBE_TO_TOPIC:
-    c.broker.subscribeToTopic(message.GetTopicName(), c)
+    c.brokerService.SubscribeToTopic(message.GetTopicName(), c)
 
   case sms_protocol_protobuf.ClientToBrokerMessage_CLIENT_UNSUBSCRIBE_FROM_TOPIC:
-    c.broker.unsubscribeFromTopic(message.GetTopicName(), c)
+    c.brokerService.UnsubscribeFromTopic(message.GetTopicName(), c)
 
   case sms_protocol_protobuf.ClientToBrokerMessage_CLIENT_SEND_MESSAGE_TO_TOPIC:
     brokerToClientMessage := new(sms_protocol_protobuf.BrokerToClientMessage)
@@ -293,7 +323,7 @@ func (c *client) processIncomingMessage(message *sms_protocol_protobuf.ClientToB
     if err != nil {
       logger.Printf("proto.Marshal error %v", err)
     } else {
-      c.broker.sendMessagePayloadToTopic(message.GetTopicName(), messagePayload)
+      c.brokerService.PublishMessagePayloadToTopic(message.GetTopicName(), messagePayload)
     }
   }
   return
