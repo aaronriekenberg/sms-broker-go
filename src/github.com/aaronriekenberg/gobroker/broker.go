@@ -137,9 +137,9 @@ func (b *broker) SubscribeToTopic(topicName string, c Client) {
 }
 
 func (b *broker) UnsubscribeFromTopic(topicName string, c Client) {
-  b.mutex.Lock()
+  b.mutex.RLock()
   topic, ok := b.topicNameToTopic[topicName]
-  b.mutex.Unlock()
+  b.mutex.RUnlock()
 
   if ok {
     topic.RemoveClient(c)
@@ -147,14 +147,14 @@ func (b *broker) UnsubscribeFromTopic(topicName string, c Client) {
 }
 
 func (b *broker) UnsubscribeFromAllTopics(c Client) {
-  b.mutex.Lock()
+  b.mutex.RLock()
   topics := make([]Topic, len(b.topicNameToTopic))
   i := 0
   for _, topic := range b.topicNameToTopic {
     topics[i] = topic
     i += 1
   }
-  b.mutex.Unlock()
+  b.mutex.RUnlock()
 
   for _, topic := range topics {
     topic.RemoveClient(c)
