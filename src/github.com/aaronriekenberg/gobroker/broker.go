@@ -128,7 +128,7 @@ func (b *broker) SubscribeToTopic(topicName string, c Client) {
   topic, ok := b.topicNameToTopic[topicName]
   if !ok {
     topic = NewTopic()
-    logger.Printf("create topic %v", topicName)
+    logger.Printf("create topic '%v'", topicName)
     b.topicNameToTopic[topicName] = topic
   }
   b.mutex.Unlock()
