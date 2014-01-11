@@ -312,11 +312,11 @@ func (c *client) processIncomingMessage(message *sms_protocol_protobuf.ClientToB
     c.brokerService.UnsubscribeFromTopic(message.GetTopicName(), c)
 
   case sms_protocol_protobuf.ClientToBrokerMessage_CLIENT_SEND_MESSAGE_TO_TOPIC:
-    brokerToClientMessage := new(sms_protocol_protobuf.BrokerToClientMessage)
-    brokerToClientMessage.MessageType =
-      sms_protocol_protobuf.BrokerToClientMessage_BROKER_TOPIC_MESSAGE_PUBLISH.Enum()
-    brokerToClientMessage.TopicName = proto.String(message.GetTopicName())
-    brokerToClientMessage.MessagePayload = message.GetMessagePayload()
+    brokerToClientMessage := &sms_protocol_protobuf.BrokerToClientMessage{
+      MessageType:    sms_protocol_protobuf.BrokerToClientMessage_BROKER_TOPIC_MESSAGE_PUBLISH.Enum(),
+      TopicName:      proto.String(message.GetTopicName()),
+      MessagePayload: message.GetMessagePayload(),
+    }
 
     var messagePayload []byte
     messagePayload, err = proto.Marshal(brokerToClientMessage)
