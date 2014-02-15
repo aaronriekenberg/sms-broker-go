@@ -139,6 +139,7 @@ func (b *broker) SubscribeToTopic(topicName string, c Client) {
 func (b *broker) getTopic(topicName string) (t Topic) {
   b.mutex.RLock()
   defer b.mutex.RUnlock()
+
   t = b.topicNameToTopic[topicName]
   return
 }
@@ -146,6 +147,7 @@ func (b *broker) getTopic(topicName string) (t Topic) {
 func (b *broker) getAllTopics() (topics []Topic) {
   b.mutex.RLock()
   defer b.mutex.RUnlock()
+
   topics = make([]Topic, len(b.topicNameToTopic))
   i := 0
   for _, topic := range b.topicNameToTopic {
