@@ -136,37 +136,42 @@ func (b *broker) SubscribeToTopic(topicName string, c Client) {
   topic.AddClient(c)
 }
 
-func (b *broker) UnsubscribeFromTopic(topicName string, c Client) {
+func (b *broker) getTopic(topicName string) (t Topic) {
   b.mutex.RLock()
-  topic, ok := b.topicNameToTopic[topicName]
-  b.mutex.RUnlock()
-
-  if ok {
-    topic.RemoveClient(c)
-  }
+  defer b.mutex.RUnlock()
+  t = b.topicNameToTopic[topicName]
+  return
 }
 
-func (b *broker) UnsubscribeFromAllTopics(c Client) {
+func (b *broker) getAllTopics() (topics []Topic) {
   b.mutex.RLock()
-  topics := make([]Topic, len(b.topicNameToTopic))
+  defer b.mutex.RUnlock()
+  topics = make([]Topic, len(b.topicNameToTopic))
   i := 0
   for _, topic := range b.topicNameToTopic {
     topics[i] = topic
     i += 1
   }
-  b.mutex.RUnlock()
+  return
+}
 
+func (b *broker) UnsubscribeFromTopic(topicName string, c Client) {
+  topic := b.getTopic(topicName)
+  if topic != nil {
+    topic.RemoveClient(c)
+  }
+}
+
+func (b *broker) UnsubscribeFromAllTopics(c Client) {
+  topics := b.getAllTopics()
   for _, topic := range topics {
     topic.RemoveClient(c)
   }
 }
 
 func (b *broker) PublishMessagePayloadToTopic(topicName string, messagePayload []byte) {
-  b.mutex.RLock()
-  topic, ok := b.topicNameToTopic[topicName]
-  b.mutex.RUnlock()
-
-  if ok {
+  topic := b.getTopic(topicName)
+  if topic != nil {
     topic.PublishMessagePayload(messagePayload)
   }
 }
