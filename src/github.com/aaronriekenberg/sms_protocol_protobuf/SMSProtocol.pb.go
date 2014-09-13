@@ -2,15 +2,23 @@
 // source: SMSProtocol.proto
 // DO NOT EDIT!
 
+/*
+Package sms_protocol_protobuf is a generated protocol buffer package.
+
+It is generated from these files:
+	SMSProtocol.proto
+
+It has these top-level messages:
+	ClientToBrokerMessage
+	BrokerToClientMessage
+*/
 package sms_protocol_protobuf
 
 import proto "code.google.com/p/goprotobuf/proto"
-import json "encoding/json"
 import math "math"
 
-// Reference proto, json, and math imports to suppress error if they are not otherwise used.
+// Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
-var _ = &json.SyntaxError{}
 var _ = math.Inf
 
 type ClientToBrokerMessage_ClientToBrokerMessageType int32
