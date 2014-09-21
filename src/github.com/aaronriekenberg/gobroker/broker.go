@@ -56,11 +56,13 @@ type Client interface {
 type topic struct {
 	mutex            sync.RWMutex
 	clientIDToClient map[string]Client
+	clientList       []Client
 }
 
 func NewTopic() Topic {
 	return &topic{
 		clientIDToClient: make(map[string]Client),
+		clientList:       make([]Client, 0),
 	}
 }
 
@@ -69,6 +71,7 @@ func (t *topic) AddClient(c Client) {
 	defer t.mutex.Unlock()
 
 	t.clientIDToClient[c.UniqueID()] = c
+	t.rebuildClientList()
 }
 
 func (t *topic) RemoveClient(c Client) {
@@ -76,19 +79,24 @@ func (t *topic) RemoveClient(c Client) {
 	defer t.mutex.Unlock()
 
 	delete(t.clientIDToClient, c.UniqueID())
+	t.rebuildClientList()
+}
+
+// Must hold t.mutex.Lock() while calling
+func (t *topic) rebuildClientList() {
+	t.clientList = make([]Client, len(t.clientIDToClient))
+	i := 0
+	for _, client := range t.clientIDToClient {
+		t.clientList[i] = client
+		i += 1
+	}
 }
 
 func (t *topic) PublishMessagePayload(payload []byte) {
 	t.mutex.RLock()
-	clients := make([]Client, len(t.clientIDToClient))
-	i := 0
-	for _, client := range t.clientIDToClient {
-		clients[i] = client
-		i += 1
-	}
-	t.mutex.RUnlock()
+	defer t.mutex.RUnlock()
 
-	for _, client := range clients {
+	for _, client := range t.clientList {
 		client.WriteMessagePayload(payload)
 	}
 }
