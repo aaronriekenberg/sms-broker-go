@@ -56,13 +56,11 @@ type Client interface {
 type topic struct {
 	mutex            sync.RWMutex
 	clientIDToClient map[string]Client
-	clientList       []Client
 }
 
 func NewTopic() Topic {
 	return &topic{
 		clientIDToClient: make(map[string]Client),
-		clientList:       make([]Client, 0),
 	}
 }
 
@@ -71,7 +69,6 @@ func (t *topic) AddClient(c Client) {
 	defer t.mutex.Unlock()
 
 	t.clientIDToClient[c.UniqueID()] = c
-	t.rebuildClientList()
 }
 
 func (t *topic) RemoveClient(c Client) {
@@ -79,24 +76,13 @@ func (t *topic) RemoveClient(c Client) {
 	defer t.mutex.Unlock()
 
 	delete(t.clientIDToClient, c.UniqueID())
-	t.rebuildClientList()
-}
-
-// Must hold t.mutex.Lock() while calling
-func (t *topic) rebuildClientList() {
-	t.clientList = make([]Client, len(t.clientIDToClient))
-	i := 0
-	for _, client := range t.clientIDToClient {
-		t.clientList[i] = client
-		i += 1
-	}
 }
 
 func (t *topic) PublishMessagePayload(payload []byte) {
 	t.mutex.RLock()
 	defer t.mutex.RUnlock()
 
-	for _, client := range t.clientList {
+	for _, client := range t.clientIDToClient {
 		client.WriteMessagePayload(payload)
 	}
 }
@@ -203,7 +189,7 @@ type client struct {
 	connection       net.Conn
 	brokerService    BrokerService
 	writeChannel     chan []byte
-	mutex            sync.RWMutex
+	destroyedMutex   sync.RWMutex
 	destroyed        bool
 }
 
@@ -236,21 +222,21 @@ func (c *client) Start() {
 }
 
 func (c *client) destroy() {
-	c.mutex.Lock()
+	c.destroyedMutex.Lock()
 	if !c.destroyed {
 		logger.Printf("disconnect client %v %v", c.uniqueID, c.connectionString)
 		c.destroyed = true
 		c.connection.Close()
 		close(c.writeChannel)
 	}
-	c.mutex.Unlock()
+	c.destroyedMutex.Unlock()
 
 	c.brokerService.UnsubscribeFromAllTopics(c)
 }
 
 func (c *client) WriteMessagePayload(payload []byte) {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
+	c.destroyedMutex.RLock()
+	defer c.destroyedMutex.RUnlock()
 
 	if !c.destroyed {
 		c.writeChannel <- payload
