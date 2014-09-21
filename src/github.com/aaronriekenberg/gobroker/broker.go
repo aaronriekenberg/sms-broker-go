@@ -17,6 +17,7 @@ import (
 const (
 	netString            = "tcp"
 	clientWriteQueueSize = 100
+	topicWriteQueueSize  = 100
 )
 
 var (
@@ -53,38 +54,51 @@ type Client interface {
 	WriteMessagePayload(payload []byte)
 }
 
+type topicAction struct {
+	addClient      Client
+	removeClient   Client
+	publishMessage []byte
+}
+
 type topic struct {
-	mutex            sync.RWMutex
+	writeChannel     chan *topicAction
 	clientIDToClient map[string]Client
 }
 
 func NewTopic() Topic {
-	return &topic{
+	t := &topic{
+		writeChannel:     make(chan *topicAction, topicWriteQueueSize),
 		clientIDToClient: make(map[string]Client),
+	}
+	go t.processActions()
+	return t
+}
+
+func (t *topic) processActions() {
+	for {
+		action := <-t.writeChannel
+		if action.publishMessage != nil {
+			for _, client := range t.clientIDToClient {
+				client.WriteMessagePayload(action.publishMessage)
+			}
+		} else if action.addClient != nil {
+			t.clientIDToClient[action.addClient.UniqueID()] = action.addClient
+		} else if action.removeClient != nil {
+			delete(t.clientIDToClient, action.removeClient.UniqueID())
+		}
 	}
 }
 
 func (t *topic) AddClient(c Client) {
-	t.mutex.Lock()
-	defer t.mutex.Unlock()
-
-	t.clientIDToClient[c.UniqueID()] = c
+	t.writeChannel <- &topicAction{addClient: c}
 }
 
 func (t *topic) RemoveClient(c Client) {
-	t.mutex.Lock()
-	defer t.mutex.Unlock()
-
-	delete(t.clientIDToClient, c.UniqueID())
+	t.writeChannel <- &topicAction{removeClient: c}
 }
 
 func (t *topic) PublishMessagePayload(payload []byte) {
-	t.mutex.RLock()
-	defer t.mutex.RUnlock()
-
-	for _, client := range t.clientIDToClient {
-		client.WriteMessagePayload(payload)
-	}
+	t.writeChannel <- &topicAction{publishMessage: payload}
 }
 
 type broker struct {
