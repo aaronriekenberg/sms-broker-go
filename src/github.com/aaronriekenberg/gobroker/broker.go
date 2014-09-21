@@ -94,24 +94,31 @@ func (t *topic) PublishMessagePayload(payload []byte) {
 }
 
 type broker struct {
-	listenAddress    string
+	listenAddresses  []string
 	mutex            sync.RWMutex
 	topicNameToTopic map[string]Topic
 }
 
-func NewBroker(listenAddress string) Broker {
+func NewBroker(listenAddresses []string) Broker {
 	return &broker{
-		listenAddress:    listenAddress,
+		listenAddresses:  listenAddresses,
 		topicNameToTopic: make(map[string]Topic),
 	}
 }
 
 func (b *broker) Run() {
-	local, err := net.Listen(netString, b.listenAddress)
+	for _, listenAddress := range b.listenAddresses[:len(b.listenAddresses)-1] {
+		go b.listen(listenAddress)
+	}
+	b.listen(b.listenAddresses[len(b.listenAddresses)-1])
+}
+
+func (b *broker) listen(listenAddress string) {
+	local, err := net.Listen(netString, listenAddress)
 	if err != nil {
 		logger.Fatalf("cannot listen: %v", err)
 	}
-	logger.Printf("listening on %v", b.listenAddress)
+	logger.Printf("listening on %v", listenAddress)
 	for {
 		clientConnection, err := local.Accept()
 		if err != nil {
@@ -349,12 +356,12 @@ func setNumProcs() {
 }
 
 func main() {
-	if len(os.Args) != 2 {
-		logger.Fatalf("usage: %v <listen address>", os.Args[0])
+	if len(os.Args) < 2 {
+		logger.Fatalf("usage: %v <listen address> [<listen address> ...]", os.Args[0])
 	}
 
 	setNumProcs()
 
-	broker := NewBroker(os.Args[1])
+	broker := NewBroker(os.Args[1:])
 	broker.Run()
 }
