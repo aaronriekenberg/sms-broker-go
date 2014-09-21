@@ -124,8 +124,7 @@ func (b *broker) Run() {
 }
 
 func (b *broker) SubscribeToTopic(topicName string, c Client) {
-	var topic Topic
-	topic = b.getTopic(topicName)
+	topic := b.getTopic(topicName)
 
 	if topic == nil {
 		b.mutex.Lock()
