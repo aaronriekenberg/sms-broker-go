@@ -56,7 +56,7 @@ type Client interface {
 
 type topicAction struct {
 	addClient      Client
-	removeClient   Client
+	removeClientID *string
 	publishMessage []byte
 }
 
@@ -83,8 +83,8 @@ func (t *topic) processActions() {
 			}
 		} else if action.addClient != nil {
 			t.clientIDToClient[action.addClient.UniqueID()] = action.addClient
-		} else if action.removeClient != nil {
-			delete(t.clientIDToClient, action.removeClient.UniqueID())
+		} else if action.removeClientID != nil {
+			delete(t.clientIDToClient, *action.removeClientID)
 		}
 	}
 }
@@ -94,7 +94,8 @@ func (t *topic) AddClient(c Client) {
 }
 
 func (t *topic) RemoveClient(c Client) {
-	t.writeChannel <- &topicAction{removeClient: c}
+	uniqueID := c.UniqueID()
+	t.writeChannel <- &topicAction{removeClientID: &uniqueID}
 }
 
 func (t *topic) PublishMessagePayload(payload []byte) {
