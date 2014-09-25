@@ -77,13 +77,16 @@ func NewTopic() Topic {
 func (t *topic) processActions() {
 	for {
 		action := <-t.writeChannel
-		if action.publishMessage != nil {
+		switch {
+		case action.publishMessage != nil:
 			for _, client := range t.clientIDToClient {
 				client.WriteMessagePayload(action.publishMessage)
 			}
-		} else if action.addClient != nil {
+
+		case action.addClient != nil:
 			t.clientIDToClient[action.addClient.UniqueID()] = action.addClient
-		} else if action.removeClientID != nil {
+
+		case action.removeClientID != nil:
 			delete(t.clientIDToClient, *action.removeClientID)
 		}
 	}
