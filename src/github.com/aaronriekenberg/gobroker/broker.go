@@ -2,10 +2,10 @@ package main
 
 import (
 	"code.google.com/p/go-uuid/uuid"
-	"code.google.com/p/goprotobuf/proto"
 	"encoding/binary"
 	"fmt"
 	"github.com/aaronriekenberg/sms_protocol_protobuf"
+	"github.com/golang/protobuf/proto"
 	"io"
 	"log"
 	"net"
