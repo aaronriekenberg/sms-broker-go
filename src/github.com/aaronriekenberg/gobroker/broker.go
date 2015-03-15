@@ -130,7 +130,7 @@ func (b *broker) listen(listenAddress string) {
 	if err != nil {
 		logger.Fatalf("cannot listen: %v", err)
 	}
-	logger.Printf("listening on %v", listenAddress)
+	logger.Printf("listening on %v", local.Addr())
 	for {
 		clientConnection, err := local.Accept()
 		if err != nil {
