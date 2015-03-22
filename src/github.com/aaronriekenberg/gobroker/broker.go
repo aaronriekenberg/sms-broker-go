@@ -171,6 +171,7 @@ func (b *broker) getAllTopics() (topics []Topic) {
 	b.mutex.RLock()
 	defer b.mutex.RUnlock()
 
+	topics = make([]Topic, 0, len(b.topicNameToTopic))
 	for _, topic := range b.topicNameToTopic {
 		topics = append(topics, topic)
 	}
