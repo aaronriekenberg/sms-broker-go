@@ -15,9 +15,10 @@ import (
 )
 
 const (
-	netString            = "tcp"
-	clientWriteQueueSize = 100
-	topicWriteQueueSize  = 100
+	netString             = "tcp"
+	clientWriteQueueSize  = 100
+	topicWriteQueueSize   = 100
+	maxMessageLengthBytes = 100 * 1024 * 1024
 )
 
 var (
@@ -306,7 +307,10 @@ func (c *client) readFromClient() {
 
 		payloadSize := binary.BigEndian.Uint32(headerBuffer)
 		if payloadSize == 0 {
-			logger.Printf("payloadSize == 0")
+			logger.Printf("incoming payloadSize == 0")
+			break
+		} else if payloadSize > maxMessageLengthBytes {
+			logger.Printf("incoming payloadSize %v > maxMessageLengthBytes", payloadSize)
 			break
 		}
 
