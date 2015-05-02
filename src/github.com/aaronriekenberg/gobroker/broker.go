@@ -11,11 +11,11 @@ import (
 	"net"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 )
 
 const (
-	netString             = "tcp"
 	clientWriteQueueSize  = 100
 	topicWriteQueueSize   = 100
 	maxMessageLengthBytes = 100 * 1024 * 1024
@@ -107,31 +107,35 @@ func (t *topic) PublishMessagePayload(payload []byte) {
 }
 
 type broker struct {
-	listenAddresses  []string
-	mutex            sync.RWMutex
-	topicNameToTopic map[string]Topic
+	netAndListenAddresses []string
+	mutex                 sync.RWMutex
+	topicNameToTopic      map[string]Topic
 }
 
-func NewBroker(listenAddresses []string) Broker {
+func NewBroker(netAndListenAddresses []string) Broker {
 	return &broker{
-		listenAddresses:  listenAddresses,
-		topicNameToTopic: make(map[string]Topic),
+		netAndListenAddresses: netAndListenAddresses,
+		topicNameToTopic:      make(map[string]Topic),
 	}
 }
 
 func (b *broker) Run() {
-	for _, listenAddress := range b.listenAddresses[:len(b.listenAddresses)-1] {
-		go b.listen(listenAddress)
+	numAddresses := len(b.netAndListenAddresses)
+	for _, netAndListenAddress := range b.netAndListenAddresses[:numAddresses-1] {
+		go b.listen(netAndListenAddress)
 	}
-	b.listen(b.listenAddresses[len(b.listenAddresses)-1])
+	b.listen(b.netAndListenAddresses[numAddresses-1])
 }
 
-func (b *broker) listen(listenAddress string) {
-	local, err := net.Listen(netString, listenAddress)
+func (b *broker) listen(netAndListenAddress string) {
+	s := strings.SplitN(netAndListenAddress, ":", 2)
+	listenNetwork := s[0]
+	listenAddress := s[1]
+	local, err := net.Listen(listenNetwork, listenAddress)
 	if err != nil {
 		logger.Fatalf("cannot listen: %v", err)
 	}
-	logger.Printf("listening on %v", local.Addr())
+	logger.Printf("listening on %v %v", listenNetwork, local.Addr())
 	for {
 		clientConnection, err := local.Accept()
 		if err != nil {
